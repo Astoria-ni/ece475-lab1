@@ -1,0 +1,9 @@
+*.vcd
+*.vpd
+*.vpd.vcd
+*.out
+*.log
+build/
+sim_build/
+obj_dir/
+.DS_Store
