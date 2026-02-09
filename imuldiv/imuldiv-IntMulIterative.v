@@ -190,7 +190,7 @@ module imuldiv_IntMulIterativeCtrl
   //state = 2'd1: calculating
   //state = 2'd2: done
 
-  reg [1:0] state, next_state; 
+  reg [1:0] state, next_state;
   
   reg mulreq_rdy_reg, mulresp_val_reg;
   reg a_mux_sel_reg, b_mux_sel_reg, result_mux_sel_reg, result_en_reg;
@@ -248,7 +248,7 @@ module imuldiv_IntMulIterativeCtrl
         add_mux_sel_reg = b_reg_lsb; //add only if b[0]
         result_en_reg = 1'b1; //allow updating result. not sign, note.
 
-        if (is_counter_zero) next_state = 2'd2;
+        if(is_counter_zero) next_state = 2'd2;
       end
       2'd2: begin //done case
         mulresp_val_reg = 1'b1;

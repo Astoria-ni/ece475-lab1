@@ -33,7 +33,7 @@ module imuldiv_IntMulIterative_helper
 
   assign done = src_done && sink_done;
 
-  vc_TestSource#(67,3) src
+  vc_TestSource#(67,14) src
   (
     .clk   (clk),
     .reset (reset),
@@ -64,7 +64,7 @@ module imuldiv_IntMulIterative_helper
     .mulresp_rdy        (sink_rdy)
   );
 
-  vc_TestSink#(64,3) sink
+  vc_TestSink#(64,14) sink
   (
     .clk   (clk),
     .reset (reset),
@@ -113,6 +113,11 @@ module tester;
     t0.src.m[7] = 67'h0_fffffff8_fffffff8; t0.sink.m[7] = 64'h00000000_00000040;
     t0.src.m[8] = 67'h0_0deadbee_10000000; t0.sink.m[8] = 64'h00deadbe_e0000000;
     t0.src.m[9] = 67'h0_deadbeef_10000000; t0.sink.m[9] = 64'hfdeadbee_f0000000;
+
+    t0.src.m[10] = 67'h0_7fffffff_7fffffff; t0.sink.m[10] = 64'h3fffffff_00000001;
+    t0.src.m[11] = 67'h0_40000000_40000000; t0.sink.m[11] = 64'h10000000_00000000;
+    t0.src.m[12] = 67'h0_00ffffff_00ffffff; t0.sink.m[12] = 64'h0000ffff_fe000001;
+    t0.src.m[13] = 67'h0_00010000_00010000; t0.sink.m[13] = 64'h00000001_00000000;
 
     #5;   t0_reset = 1'b1;
     #20;  t0_reset = 1'b0;
