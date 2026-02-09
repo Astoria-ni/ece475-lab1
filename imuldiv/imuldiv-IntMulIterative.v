@@ -30,6 +30,7 @@ module imuldiv_IntMulIterative
   wire          sign_mux_sel;
   wire          b_reg_lsb; //b_reg[0]
   wire    [4:0] counter;
+  wire          sign;
 
   imuldiv_IntMulIterativeDpath dpath
   (
@@ -47,7 +48,8 @@ module imuldiv_IntMulIterative
     .sign_en            (sign_en),
     .sign_mux_sel       (sign_mux_sel),
     .b_reg_lsb          (b_reg_lsb),
-    .counter            (counter)
+    .counter            (counter),
+    .sign               (sign)
   );
 
   imuldiv_IntMulIterativeCtrl ctrl
@@ -67,7 +69,8 @@ module imuldiv_IntMulIterative
     .sign_en            (sign_en),
     .sign_mux_sel       (sign_mux_sel),
     .b_reg_lsb          (b_reg_lsb),
-    .counter            (counter)
+    .counter            (counter),
+    .sign               (sign)
   );
 
 endmodule
@@ -95,69 +98,65 @@ module imuldiv_IntMulIterativeDpath
   input         sign_mux_sel,
 
   output        b_reg_lsb,
-  output  [4:0] counter
+  output  [4:0] counter,
+  output        sign
 );
-
-  assign mulresp_msg_result = 64'b0;
-  assign b_reg_lsb          = 1'b0;
-  assign counter            = 5'b0;
-  /*
-  //----------------------------------------------------------------------
-  // Sequential Logic
-  //----------------------------------------------------------------------
 
   reg  [63:0] a_reg;       // Register for storing operand A
   reg  [31:0] b_reg;       // Register for storing operand B
-  reg         val_reg;     // Register for storing valid bit
+  reg  [63:0] result_reg;
+  reg  [4:0]  counter_reg;
+  reg         sign_reg;
+  //just do stuff in diagram
+  wire sign_bit_a = mulreq_msg_a[31];
+  wire sign_bit_b = mulreq_msg_b[31];
 
-  always @( posedge clk ) begin
+  wire[31:0] unsigned_a = ( sign_bit_a ) ? (~mulreq_msg_a + 1'b1) : mulreq_msg_a;
+  wire[31:0] unsigned_b = ( sign_bit_b ) ? (~mulreq_msg_b + 1'b1) : mulreq_msg_b;
 
-    // Stall the pipeline if the response interface is not ready
-    if ( mulresp_rdy ) begin
-      a_reg   <= mulreq_msg_a;
-      b_reg   <= mulreq_msg_b;
-      val_reg <= mulreq_val;
+  wire[63:0] unsigned_a_64 = {32'b0, unsigned_a};
+  
+  wire[63:0] a_shift_out = a_reg << 1;
+  wire[31:0] b_shift_out = b_reg >> 1;
+
+  wire[63:0] a_mux_out = (a_mux_sel == 1'b0) ? unsigned_a_64 : a_shift_out;
+  wire[31:0] b_mux_out = (b_mux_sel == 1'b0) ? unsigned_b : b_shift_out;
+
+  wire[63:0] adder_out = result_reg + a_reg;
+  wire[63:0] add_mux_out = (add_mux_sel == 1'b0) ? result_reg : adder_out;
+
+  wire[63:0] result_mux_out = (result_mux_sel == 1'b0) ? 64'b0 : add_mux_out;
+
+  wire[4:0] counter_minus1 = counter_reg - 5'd1;
+  wire[4:0] cntr_mux_out = (cntr_mux_sel == 1'b0) ? 5'd31 : counter_minus1;
+
+  wire sign_out = sign_bit_a ^ sign_bit_b;
+
+  wire[63:0] signed_result = (~result_reg + 64'b1);
+  wire[63:0] sign_mux_out = (sign_mux_sel == 1'b0) ? result_reg : signed_result;
+
+  assign b_reg_lsb = b_reg[0];
+  assign counter = counter_reg;
+  assign mulresp_msg_result = sign_mux_out;
+  assign sign = sign_reg;
+
+  //Sequential
+  always @(posedge clk) begin
+    if(reset) begin
+      a_reg <= 64'b0;
+      b_reg <= 32'b0;
+      result_reg <= 64'b0;
+      counter_reg <= 5'b0;
+      sign_reg <= 1'b0;
+    end else begin
+      a_reg <= a_mux_out;
+      b_reg <= b_mux_out;
+      counter_reg <= cntr_mux_out;
+      if(result_en) result_reg <= result_mux_out;
+      if(sign_en) sign_reg <= sign_out;
     end
-
   end
 
-  //----------------------------------------------------------------------
-  // Combinational Logic
-  //----------------------------------------------------------------------
-
-  // Extract sign bits
-
-  wire sign_bit_a = a_reg[31];
-  wire sign_bit_b = b_reg[31];
-
-  // Unsign operands if necessary
-
-  wire [31:0] unsigned_a = ( sign_bit_a ) ? (~a_reg + 1'b1) : a_reg;
-  wire [31:0] unsigned_b = ( sign_bit_b ) ? (~b_reg + 1'b1) : b_reg;
-
-  // Computation logic
-
-  wire [63:0] unsigned_result = unsigned_a * unsigned_b;
-
-  // Determine whether or not result is signed. Usually the result is
-  // signed if one and only one of the input operands is signed. In other
-  // words, the result is signed if the xor of the sign bits of the input
-  // operands is true. Remainder opeartions are a bit trickier, and here
-  // we simply assume that the result is signed if the dividend for the
-  // rem operation is signed.
-
-  wire is_result_signed = sign_bit_a ^ sign_bit_b;
-
-  assign mulresp_msg_result
-    = ( is_result_signed ) ? (~unsigned_result + 1'b1) : unsigned_result;
-
-  // Set the val/rdy signals. The request is ready when the response is
-  // ready, and the response is valid when there is valid data in the
-  // input registers.
-
-  assign mulreq_rdy  = mulresp_rdy;
-  assign mulresp_val = val_reg;
-  */
 endmodule
 
 //------------------------------------------------------------------------
@@ -184,20 +183,86 @@ module imuldiv_IntMulIterativeCtrl
   output        sign_mux_sel,
 
   input         b_reg_lsb,
-  input   [4:0] counter
+  input   [4:0] counter,
+  input         sign
 );
-  
-  assign mulreq_rdy = 1'b1;
-  assign mulresp_val= 1'b0;
+  //state = 2'd0: not started
+  //state = 2'd1: calculating
+  //state = 2'd2: done
 
-  assign a_mux_sel  = 1'b0;
-  assign b_mux_sel  = 1'b0;
-  assign result_mux_sel = 1'b0;
-  assign result_en  = 1'b0;
-  assign add_mux_sel = 1'b0;
-  assign cntr_mux_sel = 1'b0;
-  assign sign_en     = 1'b0;
-  assign sign_mux_sel = 1'b0;
+  reg [1:0] state, next_state; 
+  
+  reg mulreq_rdy_reg, mulresp_val_reg;
+  reg a_mux_sel_reg, b_mux_sel_reg, result_mux_sel_reg, result_en_reg;
+  reg add_mux_sel_reg, cntr_mux_sel_reg, sign_en_reg, sign_mux_sel_reg;
+
+  assign mulreq_rdy = mulreq_rdy_reg;
+  assign mulresp_val = mulresp_val_reg;
+
+  assign a_mux_sel = a_mux_sel_reg;
+  assign b_mux_sel = b_mux_sel_reg;
+  assign result_mux_sel = result_mux_sel_reg;
+  assign result_en = result_en_reg;
+
+  assign add_mux_sel = add_mux_sel_reg;
+  assign cntr_mux_sel = cntr_mux_sel_reg;
+  assign sign_en = sign_en_reg;
+  assign sign_mux_sel = sign_mux_sel_reg;
+
+  wire is_counter_zero = (counter == 5'd0);
+
+  always @(*) begin
+    next_state = state;
+    //defaults
+    mulreq_rdy_reg = 1'b0;
+    mulresp_val_reg = 1'b0;
+    a_mux_sel_reg = 1'b0;
+    b_mux_sel_reg = 1'b0;
+    result_mux_sel_reg = 1'b0;
+    result_en_reg = 1'b0;
+    add_mux_sel_reg = 1'b0;
+    cntr_mux_sel_reg = 1'b0;
+    sign_en_reg = 1'b0;
+    sign_mux_sel_reg = 1'b0;
+
+    case(state)
+      2'd0: begin //not started case
+        mulreq_rdy_reg = 1'b1; //ready for input!
+        if(mulreq_val) begin //if we received smth
+          a_mux_sel_reg = 1'b0; //initially we take in |a|
+          b_mux_sel_reg = 1'b0;
+          cntr_mux_sel_reg = 1'b0; //initialize counter = 31
+          result_mux_sel_reg = 1'b0; //initialize result=0
+          result_en_reg = 1'b1;
+          sign_en_reg = 1'b1; //allow for updating of result & sign
+
+          next_state = 2'd1;
+        end
+      end
+
+      2'd1: begin //currently calculating case
+        a_mux_sel_reg = 1'b1;
+        b_mux_sel_reg = 1'b1;
+        cntr_mux_sel_reg = 1'b1; //^ initialized already so use new values
+        result_mux_sel_reg = 1'b1; //again initialized so use new values
+        add_mux_sel_reg = b_reg_lsb; //add only if b[0]
+        result_en_reg = 1'b1; //allow updating result. not sign, note.
+
+        if (is_counter_zero) next_state = 2'd2;
+      end
+      2'd2: begin //done case
+        mulresp_val_reg = 1'b1;
+        result_en_reg = 1'b0; //freeze result reg
+        sign_mux_sel_reg = sign; //use this sign!!
+        if(mulresp_rdy) next_state = 2'd0; //we're done...
+      end
+    endcase
+  end
+
+  always @(posedge clk) begin
+    if(reset) state <= 2'd0;
+    else state <= next_state;
+  end
 
 endmodule
 
