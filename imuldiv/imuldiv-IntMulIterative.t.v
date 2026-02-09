@@ -33,7 +33,7 @@ module imuldiv_IntMulIterative_helper
 
   assign done = src_done && sink_done;
 
-  vc_TestSource#(67,14) src
+  vc_TestSource#(67,3) src
   (
     .clk   (clk),
     .reset (reset),
@@ -64,7 +64,7 @@ module imuldiv_IntMulIterative_helper
     .mulresp_rdy        (sink_rdy)
   );
 
-  vc_TestSink#(64,14) sink
+  vc_TestSink#(64,3) sink
   (
     .clk   (clk),
     .reset (reset),
